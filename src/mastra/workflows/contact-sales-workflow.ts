@@ -6,22 +6,6 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import z from "zod";
 
-const init = createStep({
-  id: 'init',
-  description: 'Initialize the workflow',
-  inputSchema: z.object({ }),
-  outputSchema: z.object({
-    message: z.string(),
-  }),
-  execute: async () => {
-    return {
-      message: `Thanks for reaching the sales team. I'll grab your email and your question to route you to the right person.
-
-What's your work email?`,
-    }
-  }
-})
-
 const askEmail = createStep({
   id: 'askEmail',
   description: 'Ask user their email',
@@ -36,7 +20,10 @@ const askEmail = createStep({
   }),
   execute: async ({ inputData, resumeData, suspend }) => {
     if (!resumeData?.email) {
-      return suspend({ })
+      return suspend({ 
+      message: `Thanks for reaching the sales team. I'll grab your email and your question to route you to the right person.
+What's your work email?`,
+      })
     }
 
     if (!resumeData.email.includes('@')) {
@@ -46,7 +33,7 @@ const askEmail = createStep({
     }
 
     return {
-      message: 'Great, what would you like help with regarding pricing, plans, procurement, or purchasing?',
+      message: 'fox',
       email: resumeData.email
     }
   }
@@ -68,7 +55,9 @@ const askQuery = createStep({
   }),
   execute: async ({ inputData, resumeData, suspend }) => {
     if (!resumeData?.query) {
-      return suspend({ })
+      return suspend({ 
+        message: 'Great, what would you like help with regarding pricing, plans, procurement, or purchasing?'
+      })
     }
 
     if (resumeData.query.includes('code')) {
@@ -99,7 +88,7 @@ const confirm = createStep({
     query: z.string()
   }),
   execute: async ({ inputData, resumeData, suspend, bail }) => {
-    if (!resumeData?.confirmed) {
+    if (!resumeData) {
       return suspend({ 
         message: `Here's what I'll send to our sales team:
 Email: ${inputData.email}
@@ -110,9 +99,11 @@ Is this OK to submit?`
     }
 
     if (!resumeData.confirmed) {
-      return bail({
-        message: `No worries - we'll start again to make sure everything's correct. I'll clear the details collected so far. What's your work email?`,
-      })
+      console.log('bailing')
+      throw new Error(`No worries - we'll start again to make sure everything's correct. I'll clear the details collected so far. Type anything to start again!`)
+      // return bail({
+      //   message: `No worries - we'll start again to make sure everything's correct. I'll clear the details collected so far. What's your work email?`,
+      // })
     }
 
     return {
@@ -135,19 +126,19 @@ const send = createStep({
   }),
   execute: async ({ inputData }) => {
     return {
-      message: `Thanks! I've sent this to the right salesperson. You'll hear back at ${inputData.email}}.`
+      message: `Thanks! I've sent this to the right salesperson. You'll hear back at ${inputData.email}. If you have another query, just type below and I gotchu.`
     }
   }
 })
 
 export const contactSalesWorkflow = createWorkflow({
-  id: 'contact-sales-workflow',
-  inputSchema: z.object({ }),
+  id: 'contactSalesWorkflow',
+  inputSchema: z.object({ message: z.string() }),
   outputSchema: z.object({
     message: z.string(),
   }),
 })
-.then(init)
+// .then(init)
 .then(askEmail)
 .then(askQuery)
 .then(confirm)
