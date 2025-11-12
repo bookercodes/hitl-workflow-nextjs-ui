@@ -1,24 +1,35 @@
 'use client'
 
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
 import { mastraClient } from '@/lib/mastra-client'
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef } from "react";
+import { Conversation, ConversationContent } from '@/components/ai-elements/conversation'
+import { Message, MessageContent } from '@/components/ai-elements/message'
+import { PromptInput, PromptInputTextarea, PromptInputSubmit } from '@/components/ai-elements/prompt-input'
+import { Button } from '@/components/ui/button'
+
+type MessageType = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
 
 export default function Chat() {
   const [runId, setRunId] = useState('')
-  const [messages, setMessages] = useState<string[]>([])
-  const [inputValue, setInputValue] = useState('')
+  const [messages, setMessages] = useState<MessageType[]>([])
   const currentStep = useRef('init')
 
-  const addMessage = (text: string) => {
-    setMessages((prevMessages) => [...prevMessages, text])
+  const addMessage = (content: string, role: 'user' | 'assistant' = 'assistant') => {
+    setMessages((prevMessages) => [...prevMessages, {
+      id: Date.now().toString() + Math.random().toString(),
+      role,
+      content
+    }])
   }
 
-  const handleInput = async () => {
+  const handleInput = async (message: any, event?: any) => {
+    const inputValue = message?.text || ''
     if (!inputValue) return
-    addMessage(inputValue)
-    setInputValue('')
+    addMessage(inputValue, 'user')
 
     if (currentStep.current === 'init') {
       const workflow = mastraClient.getWorkflow('contactSalesWorkflow')
@@ -29,7 +40,7 @@ export default function Chat() {
       }) as any
       setRunId(runId)
       console.log('result', result)
-      addMessage(result.steps.askEmail.suspendPayload.message)
+      addMessage(result.steps.askEmail.suspendPayload.message, 'assistant')
       currentStep.current = 'askEmail'
       return
     }
@@ -44,11 +55,11 @@ export default function Chat() {
         },
       })
       if (result.steps.askEmail.status === 'success') {
-        addMessage(result.steps.askQuery.suspendPayload.message)
+        addMessage(result.steps.askQuery.suspendPayload.message, 'assistant')
         currentStep.current = 'askQuery'
         return
       }
-      addMessage(result.steps.askEmail.suspendPayload.message)
+      addMessage(result.steps.askEmail.suspendPayload.message, 'assistant')
       console.log('result', result)
     }
 
@@ -63,17 +74,14 @@ export default function Chat() {
       })
 
       if (result.steps.askQuery.status === 'success') {
-        addMessage(result.steps.confirm.suspendPayload.message)
+        addMessage(result.steps.confirm.suspendPayload.message, 'assistant')
         currentStep.current = 'confirm'
         return
       }
-      addMessage(result.steps.askQuery.suspendPayload.message)
+      addMessage(result.steps.askQuery.suspendPayload.message, 'assistant')
     }
 
-
-
     return
-
   }
 
   const handleConfirm = async () => {
@@ -90,12 +98,12 @@ export default function Chat() {
     }) as any
     console.log('result', result)
     if (result.steps.confirm.status === 'success') {
-      addMessage(result.result.message)
+      addMessage(result.result.message, 'assistant')
       currentStep.current = 'init'
       return
     }
     if (result.status === 'failed') {
-      addMessage(result.error.split('!')[0] + '!')
+      addMessage(result.error.split('!')[0] + '!', 'assistant')
       currentStep.current = 'init'
       return
     }
@@ -109,27 +117,33 @@ export default function Chat() {
   }
 
   return (
-    <div>
-      <ul>
-        {messages.map((message, index) => (
-          <li key={index}>{message}</li>
-        ))}
-      </ul>
+    <div className="flex h-screen flex-col">
+      <Conversation className="flex-1">
+        <ConversationContent>
+          {messages.length === 0 && (
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              Start a conversation
+            </div>
+          )}
+          {messages.map((message) => (
+            <Message key={message.id} from={message.role}>
+              <MessageContent>{message.content}</MessageContent>
+            </Message>
+          ))}
+        </ConversationContent>
+      </Conversation>
       {currentStep.current !== 'confirm' && (
-        <form onSubmit={(e) => {
-          e.preventDefault()
-          handleInput()
-        }}>
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Enter text..."
-          />
-        </form>
+        <div className="border-t p-4">
+          <PromptInput onSubmit={handleInput}>
+            <PromptInputTextarea placeholder="Enter text..." />
+            <PromptInputSubmit />
+          </PromptInput>
+        </div>
       )}
       {currentStep.current === 'confirm' && (
-        <button onClick={handleConfirm}>Confirm</button>
+        <div className="border-t p-4">
+          <Button onClick={handleConfirm} className="w-full">Confirm</Button>
+        </div>
       )}
     </div>
   )
