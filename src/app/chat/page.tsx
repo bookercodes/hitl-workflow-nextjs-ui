@@ -1,130 +1,108 @@
 'use client'
 
 import { mastraClient } from '@/lib/mastra-client'
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { Conversation, ConversationContent } from '@/components/ai-elements/conversation'
 import { Message, MessageContent } from '@/components/ai-elements/message'
 import { PromptInput, PromptInputTextarea, PromptInputSubmit } from '@/components/ai-elements/prompt-input'
 import { Button } from '@/components/ui/button'
 
-type MessageType = {
+type Role = 'user' | 'assistant'
+type Message = {
   id: string
-  role: 'user' | 'assistant'
+  role: Role
   content: string
 }
+type WorkflowStep = 'init' | 'askEmail' | 'askQuery' | 'confirm' | 'send'
 
 export default function Chat() {
-  const [runId, setRunId] = useState('')
-  const [messages, setMessages] = useState<MessageType[]>([])
-  const currentStep = useRef('init')
+  const runId = useRef('')
+  const [messages, setMessages] = useState<Message[]>([])
+  const currentStep = useRef<WorkflowStep>('init')
+  const workflow = useMemo(() => mastraClient.getWorkflow('contactSalesWorkflow'), [])
 
-  const addMessage = (content: string, role: 'user' | 'assistant' = 'assistant') => {
+  const addMessage = (content: string, role: Role = 'assistant') => {
     setMessages((prevMessages) => [...prevMessages, {
-      id: Date.now().toString() + Math.random().toString(),
+      id: Math.random().toString(),
       role,
       content
     }])
   }
 
-  const handleInput = async (message: any, event?: any) => {
-    const inputValue = message?.text || ''
-    if (!inputValue) return
-    addMessage(inputValue, 'user')
+  const handleInput = async (message: any) => {
+    const input = message?.text
+    if (!input) return
+    addMessage(input, 'user')
 
     if (currentStep.current === 'init') {
-      const workflow = mastraClient.getWorkflow('contactSalesWorkflow')
-      const { runId } = await workflow.createRunAsync()
+      const { runId: newRunId } = await workflow.createRunAsync()
+      runId.current = newRunId
+
       const result = await workflow.startAsync({
-        runId,
-        inputData: { message: inputValue },
+        runId: newRunId,
+        inputData: {}
       }) as any
-      setRunId(runId)
-      console.log('result', result)
       addMessage(result.steps.askEmail.suspendPayload.message, 'assistant')
       currentStep.current = 'askEmail'
       return
     }
 
     if (currentStep.current === 'askEmail') {
-      const workflow = mastraClient.getWorkflow('contactSalesWorkflow')
       const result = await workflow.resumeAsync({
-        runId,
+        runId: runId.current,
         step: 'askEmail',
         resumeData: {
-          email: inputValue,
+          email: input,
         },
       })
+
       if (result.steps.askEmail.status === 'success') {
         addMessage(result.steps.askQuery.suspendPayload.message, 'assistant')
         currentStep.current = 'askQuery'
-        return
+      } else {
+        addMessage(result.steps.askEmail.suspendPayload.message, 'assistant')
       }
-      addMessage(result.steps.askEmail.suspendPayload.message, 'assistant')
-      console.log('result', result)
+      return
     }
 
     if (currentStep.current === 'askQuery') {
-      const workflow = mastraClient.getWorkflow('contactSalesWorkflow')
       const result = await workflow.resumeAsync({
-        runId,
+        runId: runId.current,
         step: 'askQuery',
         resumeData: {
-          query: inputValue,
+          query: input,
         },
       })
 
       if (result.steps.askQuery.status === 'success') {
         addMessage(result.steps.confirm.suspendPayload.message, 'assistant')
         currentStep.current = 'confirm'
-        return
+      } else {
+        addMessage(result.steps.askQuery.suspendPayload.message, 'assistant')
       }
-      addMessage(result.steps.askQuery.suspendPayload.message, 'assistant')
+      return
     }
-
-    return
   }
 
   const handleConfirm = async () => {
-    const confirmed = window.confirm('Are you sure you want to confirm?')
+    const confirmed = window.confirm('Are you sure you want to send?')
 
-
-    const workflow = mastraClient.getWorkflow('contactSalesWorkflow')
     const result = await workflow.resumeAsync({
-      runId,
+      runId: runId.current,
       step: 'confirm',
       resumeData: {
         confirmed
       },
     }) as any
-    console.log('result', result)
-    if (result.steps.confirm.status === 'success') {
-      addMessage(result.result.message, 'assistant')
-      currentStep.current = 'init'
-      return
-    }
-    if (result.status === 'failed') {
-      addMessage(result.error.split('!')[0] + '!', 'assistant')
-      currentStep.current = 'init'
-      return
-    }
-
-
-
-
-
-    // TODO: Add confirm code here
-
+    addMessage(result.result.message, 'assistant')
+    currentStep.current = 'init'
   }
+
 
   return (
     <div className="flex h-screen flex-col">
       <Conversation className="flex-1">
         <ConversationContent>
-          {messages.length === 0 && (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              Start a conversation
-            </div>
-          )}
           {messages.map((message) => (
             <Message key={message.id} from={message.role}>
               <MessageContent>{message.content}</MessageContent>
