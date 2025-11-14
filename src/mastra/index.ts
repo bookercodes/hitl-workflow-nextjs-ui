@@ -4,9 +4,11 @@ import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
 import { contactSalesWorkflow } from './workflows/contact-sales-workflow';
 import { workflowRoute } from '@mastra/ai-sdk';
+import { queryClassifierAgent } from './agents/query-classifier-agent';
 
 export const mastra = new Mastra({
   workflows:{  contactSalesWorkflow },
+  agents: { queryClassifierAgent },
   storage: new LibSQLStore({
     // stores observability, scores, ... into memory storage, if it needs to persist, change to file:../mastra.db
     url: ":memory:",

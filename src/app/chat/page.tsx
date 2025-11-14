@@ -1,103 +1,119 @@
-'use client'
+"use client";
 
-import { mastraClient } from '@/lib/mastra-client'
+import { mastraClient } from "@/lib/mastra-client";
 import { useState, useRef, useMemo } from "react";
-import { Conversation, ConversationContent } from '@/components/ai-elements/conversation'
-import { Message, MessageContent } from '@/components/ai-elements/message'
-import { PromptInput, PromptInputTextarea, PromptInputSubmit } from '@/components/ai-elements/prompt-input'
-import { Button } from '@/components/ui/button'
+import {
+  Conversation,
+  ConversationContent,
+} from "@/components/ai-elements/conversation";
+import { Message, MessageContent } from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputSubmit,
+} from "@/components/ai-elements/prompt-input";
+import { Button } from "@/components/ui/button";
 
-type Role = 'user' | 'assistant'
+type Role = "user" | "assistant";
 type Message = {
-  id: string
-  role: Role
-  content: string
-}
-type WorkflowStep = 'init' | 'askEmail' | 'askQuery' | 'confirm' | 'send'
+  id: string;
+  role: Role;
+  content: string;
+};
+type WorkflowStep =  "askEmail" | "askQuery" | "confirm" | "send";
 
 export default function Chat() {
-  const runId = useRef('')
-  const [messages, setMessages] = useState<Message[]>([])
-  const currentStep = useRef<WorkflowStep>('init')
-  const workflow = useMemo(() => mastraClient.getWorkflow('contactSalesWorkflow'), [])
+  const [messages, setMessages] = useState<Message[]>([]);
+  const runId = useRef("");
+  const currentStep = useRef<WorkflowStep>(null);
+  const workflow = useMemo(
+    () => mastraClient.getWorkflow("contactSalesWorkflow"),
+    [],
+  );
 
-  const addMessage = (content: string, role: Role = 'assistant') => {
-    setMessages((prevMessages) => [...prevMessages, {
-      id: Math.random().toString(),
-      role,
-      content
-    }])
-  }
+  const addMessage = (content: string, role: Role) => {
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      {
+        id: Math.random().toString(),
+        role,
+        content,
+      },
+    ]);
+  };
 
   const handleInput = async (message: any) => {
-    const input = message?.text
-    if (!input) return
-    addMessage(input, 'user')
+    const input = message?.text;
+    if (!input) return;
+    addMessage(input, "user");
 
-    if (currentStep.current === 'init') {
-      const { runId: newRunId } = await workflow.createRunAsync()
-      runId.current = newRunId
+    if (!currentStep.current) {
+      const { runId: newRunId } = await workflow.createRunAsync();
+      runId.current = newRunId;
 
-      const result = await workflow.startAsync({
+      const response = await workflow.startAsync({
         runId: newRunId,
-        inputData: {}
-      }) as any
-      addMessage(result.steps.askEmail.suspendPayload.message, 'assistant')
-      currentStep.current = 'askEmail'
-      return
+        inputData: {},
+      })
+      console.log("init.response", response);
+      addMessage(response.steps.askEmail.suspendPayload.message, "assistant");
+      currentStep.current = "askEmail";
+      return;
     }
 
-    if (currentStep.current === 'askEmail') {
-      const result = await workflow.resumeAsync({
+    if (currentStep.current === "askEmail") {
+      const response = await workflow.resumeAsync({
         runId: runId.current,
-        step: 'askEmail',
+        step: "askEmail",
         resumeData: {
           email: input,
         },
-      })
+      });
 
-      if (result.steps.askEmail.status === 'success') {
-        addMessage(result.steps.askQuery.suspendPayload.message, 'assistant')
-        currentStep.current = 'askQuery'
+      console.log("askEmail.response", response);
+      if (response.steps.askEmail.status === "success") {
+        addMessage(response.steps.askQuery.suspendPayload.message, "assistant");
+        currentStep.current = "askQuery";
       } else {
-        addMessage(result.steps.askEmail.suspendPayload.message, 'assistant')
+        addMessage(response.steps.askEmail.suspendPayload.message, "assistant");
       }
-      return
+      return;
     }
 
-    if (currentStep.current === 'askQuery') {
-      const result = await workflow.resumeAsync({
+    if (currentStep.current === "askQuery") {
+      const response = await workflow.resumeAsync({
         runId: runId.current,
-        step: 'askQuery',
+        step: "askQuery",
         resumeData: {
           query: input,
         },
       })
+      console.log("askQuery.response", response);
 
-      if (result.steps.askQuery.status === 'success') {
-        addMessage(result.steps.confirm.suspendPayload.message, 'assistant')
-        currentStep.current = 'confirm'
+      if (response.steps.askQuery.status === "success") {
+        addMessage(response.steps.confirm.suspendPayload.message, "assistant");
+        currentStep.current = "confirm";
       } else {
-        addMessage(result.steps.askQuery.suspendPayload.message, 'assistant')
+        addMessage(response.steps.askQuery.suspendPayload.message, "assistant");
       }
-      return
+      return;
     }
-  }
+  };
 
   const handleConfirm = async () => {
-    const confirmed = window.confirm('Are you sure you want to send?')
+    const confirmed = window.confirm("Are you sure you want to send?");
 
-    const result = await workflow.resumeAsync({
+    const response = await workflow.resumeAsync({
       runId: runId.current,
-      step: 'confirm',
+      step: "confirm",
       resumeData: {
-        confirmed
+        confirmed,
       },
     }) as any
-    addMessage(result.result.message, 'assistant')
-    currentStep.current = 'init'
-  }
-
+    console.log("confirm.response",response)
+    addMessage(response.result.message, "assistant");
+    currentStep.current = null
+  };
 
   return (
     <div className="flex h-screen flex-col">
@@ -110,7 +126,7 @@ export default function Chat() {
           ))}
         </ConversationContent>
       </Conversation>
-      {currentStep.current !== 'confirm' && (
+      {currentStep.current !== "confirm" && (
         <div className="border-t p-4">
           <PromptInput onSubmit={handleInput}>
             <PromptInputTextarea placeholder="Enter text..." />
@@ -118,11 +134,13 @@ export default function Chat() {
           </PromptInput>
         </div>
       )}
-      {currentStep.current === 'confirm' && (
+      {currentStep.current === "confirm" && (
         <div className="border-t p-4">
-          <Button onClick={handleConfirm} className="w-full">Confirm</Button>
+          <Button onClick={handleConfirm} className="w-full">
+            Confirm
+          </Button>
         </div>
       )}
     </div>
-  )
+  );
 }

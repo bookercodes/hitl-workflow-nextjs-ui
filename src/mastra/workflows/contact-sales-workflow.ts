@@ -39,20 +39,29 @@ const askQuery = createStep({
     query: z.string()
   }),
   outputSchema: emptySchema,
-  execute: async ({ resumeData, suspend, state, setState }) => {
+  execute: async ({ resumeData, suspend, state, setState, mastra }) => {
     if (!resumeData?.query) {
       return suspend({
         message: 'Great, what would you like help with regarding pricing, plans, procurement, or purchasing?'
       })
     }
 
-    if (resumeData.query.includes('code')) {
+
+    const agent = mastra.getAgent("queryClassifierAgent")
+    const { object } = await agent.generate(resumeData.query, {
+      structuredOutput: {
+        schema: z.object({
+          isSalesQuery: z.boolean(),
+          rejectionMessage: z.string()
+        })
+      }
+    })
+
+    if (!object.isSalesQuery) {
       return suspend({
-        message: `It looks like this is more of a technical/support question. This channel is for sales (pricing, quotes, procurement, renewals)`
+        message: object.rejectionMessage
       })
     }
-
-    console.log('unreachable')
 
     setState({
       ...state,
@@ -83,6 +92,7 @@ Is this OK to submit?`
     }
 
     if (!resumeData.confirmed) {
+      // why does bail still return success?
       return bail({
         message: `No worries - we'll start again to make sure everything's correct. I'll clear the details collected so far. Type anything to start again!`
       })
@@ -111,6 +121,7 @@ export const contactSalesWorkflow = createWorkflow({
   outputSchema: z.object({
     message: z.string(),
   }),
+  steps: [askEmail, askQuery, confirm, send]
 })
   .then(askEmail)
   .then(askQuery)
