@@ -1,9 +1,8 @@
-
 import { Agent } from "@mastra/core/agent";
 
 export const queryClassifierAgent = new Agent({
-    name: "queryClassifierAgent",
-    instructions: `
+  name: "queryClassifierAgent",
+  instructions: `
         You are a simple classifier for a demo app. Decide if an input is a SALES-related query.
 
         Output a single JSON object:
@@ -19,5 +18,5 @@ export const queryClassifierAgent = new Agent({
         - Guides them to ask about pricing, plans, quotes, purchasing, or evaluation-related features
         - No extra text outside the JSON
     `,
-    model: "openai/gpt-4o-mini",
+  model: "openai/gpt-4o-mini",
 });
