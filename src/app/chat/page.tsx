@@ -9,6 +9,8 @@ import {
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import {
   PromptInput,
+  PromptInputFooter,
+  PromptInputBody,
   PromptInputTextarea,
   PromptInputSubmit,
 } from "@/components/ai-elements/prompt-input";
@@ -166,8 +168,12 @@ export default function Chat() {
       {currentStep.current !== "confirm" && (
         <div className="border-t p-4">
           <PromptInput onSubmit={handleInput}>
-            <PromptInputTextarea placeholder="Enter text..." />
-            <PromptInputSubmit disabled={isRunning} />
+            <PromptInputBody>
+              <PromptInputTextarea placeholder="Enter text..." />
+            </PromptInputBody>
+            <PromptInputFooter className="flex justify-end">
+              <PromptInputSubmit disabled={isRunning} />
+            </PromptInputFooter>
           </PromptInput>
         </div>
       )}
